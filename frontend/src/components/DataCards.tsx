@@ -331,3 +331,4 @@ export function CourseDetailsCard({ courses }: { courses: CourseItemData[] }) {
     </div>
   );
 }
+
