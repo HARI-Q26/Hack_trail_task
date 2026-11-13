@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kit_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: kit_college
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kit_college"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kit_backend
+    restart: unless-stopped
+    environment:
+      COLLEGE_API_BASE_URL: ${COLLEGE_API_BASE_URL:-https://ht.knowvally.com}
+      COLLEGE_PARTICIPANT_KEY: ${COLLEGE_PARTICIPANT_KEY:-kit_live_521a568a005f9b3eefea91b7b5ad539f6d76e770}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROK_API_KEY: ${GROQ_API_KEY}
+      GROK_BASE_URL: https://api.groq.com/openai/v1
+      GROK_MODEL: openai/gpt-oss-120b
+      GROQ_FALLBACK_MODEL: openai/gpt-oss-20b
+      GROQ_STT_MODEL: whisper-large-v3-turbo
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/kit_college
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-iEBJzWk7317neB-pxnUT14hJsOrwrPXvChizhMxe86o}
+      SESSION_COOKIE_NAME: quirri_session
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      KNOWLEDGE_DOCS_DIR: /app/data/documents
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/documents:/app/data/documents
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kit_frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
