@@ -10,8 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY scripts ./scripts
-
-RUN mkdir -p /app/data/documents
+COPY data ./data
 
 EXPOSE 8000
 
