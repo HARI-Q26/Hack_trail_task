@@ -167,31 +167,6 @@ export function Transcript({
               ) : null;
             })}
 
-            {/* Subtle Collapsed Actions / Tools Performed */}
-            {entry.toolsUsed && entry.toolsUsed.length > 0 && (
-              <details className="mt-2 border-t border-slate-100 pt-2 text-xs">
-                <summary className="cursor-pointer font-medium text-slate-400 hover:text-slate-600 transition-colors">
-                  ⚙️ Actions completed ({entry.toolsUsed.length})
-                </summary>
-                <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
-                  {entry.toolsUsed.map((tool, idx) => (
-                    <span
-                      key={`${tool.tool_name}-${idx}`}
-                      className={`rounded-md border px-2 py-0.5 text-[11px] font-mono ${
-                        tool.status === "success"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : tool.status === "pending_confirmation"
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-rose-200 bg-rose-50 text-rose-700"
-                      }`}
-                    >
-                      {tool.tool_name} ({tool.status})
-                    </span>
-                  ))}
-                </div>
-              </details>
-            )}
-
             {/* Explicit Confirmation Banner */}
             {entry.pendingConfirmation && (
               <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50/90 p-4 shadow-2xs">
