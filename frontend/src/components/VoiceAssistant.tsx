@@ -139,7 +139,6 @@ export function VoiceAssistant() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [continuousMode, setContinuousMode] = useState(true);
   const [ttsEnabled, setTtsEnabled] = useState(true);
-  const [bargeInEnabled, setBargeInEnabled] = useState(false);
 
   // Phone Call Mode state
   const [isCallActive, setIsCallActive] = useState(false);
@@ -161,6 +160,7 @@ export function VoiceAssistant() {
   const conversationActiveRef = useRef(false);
   const conversationIdRef = useRef<string | null>(null);
   const submitTurnRef = useRef<(messageText: string) => Promise<void>>(async () => {});
+  const startListeningRef = useRef<() => void>(() => {});
   const utteranceTokenRef = useRef(0);
   const recognitionTokenRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -208,6 +208,7 @@ export function VoiceAssistant() {
       setVoiceState("idle");
       return;
     }
+    conversationActiveRef.current = true;
     cancelSpeechNow();
     setErrorMsg(null);
     setVoiceState("listening");
@@ -235,6 +236,13 @@ export function VoiceAssistant() {
               void submitTurnRef.current(text.trim());
             } else {
               setVoiceState("idle");
+              if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                setTimeout(() => {
+                  if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                    startListeningRef.current();
+                  }
+                }, 300);
+              }
             }
           } catch (err) {
             setErrorMsg(err instanceof Error ? err.message : "Whisper transcription failed.");
@@ -242,6 +250,13 @@ export function VoiceAssistant() {
           }
         } else {
           setVoiceState("idle");
+          if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+            setTimeout(() => {
+              if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                startListeningRef.current();
+              }
+            }, 300);
+          }
         }
       };
 
@@ -250,7 +265,7 @@ export function VoiceAssistant() {
       setErrorMsg(err instanceof Error ? err.message : "Could not access microphone.");
       setVoiceState("idle");
     }
-  }, [cancelSpeechNow]);
+  }, [cancelSpeechNow, continuousMode, isMicMuted]);
 
   const stopWhisperRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -260,6 +275,9 @@ export function VoiceAssistant() {
 
   const startListening = useCallback(() => {
     if (isMicMuted) return;
+
+    // Automatically mark the conversation as active for continuous flow
+    conversationActiveRef.current = true;
 
     if (useWhisperStt) {
       void startWhisperRecording();
@@ -320,7 +338,9 @@ export function VoiceAssistant() {
           // Automatic seamless switch to Groq Whisper STT on network error
           setUseWhisperStt(true);
           void startWhisperRecording();
-        } else if (event.error !== "aborted" && event.error !== "no-speech") {
+        } else if (event.error === "no-speech") {
+          // Normal pause in speech, will restart automatically in onend
+        } else if (event.error !== "aborted") {
           setErrorMsg(`Speech recognition error: ${event.error}`);
           setVoiceState("idle");
         } else {
@@ -333,16 +353,19 @@ export function VoiceAssistant() {
         setInterimTranscript("");
         const spoken = finalText.trim();
         if (spoken) {
+          // Process recognized user speech
           void submitTurnRef.current(spoken);
         } else {
-          setVoiceState("idle");
-          // If in call and continuous mode, re-arm listening after a moment
-          if (conversationActiveRef.current && continuousMode && isCallActive && !isMicMuted) {
+          // User paused without speech; automatically re-arm listening if continuous mode is on
+          if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+            setVoiceState("idle");
             setTimeout(() => {
-              if (conversationActiveRef.current && isCallActive && !isMicMuted) {
-                startListening();
+              if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                startListeningRef.current();
               }
-            }, 600);
+            }, 300);
+          } else {
+            setVoiceState("idle");
           }
         }
       };
@@ -354,7 +377,11 @@ export function VoiceAssistant() {
       setUseWhisperStt(true);
       void startWhisperRecording();
     }
-  }, [cancelSpeechNow, continuousMode, isCallActive, isMicMuted, startWhisperRecording, useWhisperStt]);
+  }, [cancelSpeechNow, continuousMode, isMicMuted, startWhisperRecording, useWhisperStt]);
+
+  useEffect(() => {
+    startListeningRef.current = startListening;
+  }, [startListening]);
 
   const handleStopConversation = useCallback(() => {
     conversationActiveRef.current = false;
@@ -391,9 +418,14 @@ export function VoiceAssistant() {
 
   const speakResponse = useCallback(
     (text: string) => {
+      // If TTS disabled or unsupported, auto-resume listening immediately with a small delay
       if (!ttsEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
         if (conversationActiveRef.current && continuousMode && !isMicMuted) {
-          setTimeout(startListening, 300);
+          setTimeout(() => {
+            if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+              startListeningRef.current();
+            }
+          }, 350);
         } else {
           setVoiceState("idle");
         }
@@ -419,14 +451,21 @@ export function VoiceAssistant() {
           if (myToken !== utteranceTokenRef.current) return;
           setVoiceState("speaking");
         };
+
+        // When assistant finishes speaking, automatically turn the mic back on!
         utterance.onend = () => {
           if (myToken !== utteranceTokenRef.current) return;
           if (conversationActiveRef.current && continuousMode && !isMicMuted) {
-            startListening();
+            setTimeout(() => {
+              if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                startListeningRef.current();
+              }
+            }, 350);
           } else {
             setVoiceState("idle");
           }
         };
+
         utterance.onerror = (event) => {
           if (myToken !== utteranceTokenRef.current) return;
           const errCode = (event as SpeechSynthesisErrorEvent).error;
@@ -434,15 +473,31 @@ export function VoiceAssistant() {
             setVoiceState("idle");
             return;
           }
-          setVoiceState("idle");
+          if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+            setTimeout(() => {
+              if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+                startListeningRef.current();
+              }
+            }, 350);
+          } else {
+            setVoiceState("idle");
+          }
         };
 
         window.speechSynthesis.speak(utterance);
       } catch {
-        setVoiceState("idle");
+        if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+          setTimeout(() => {
+            if (conversationActiveRef.current && continuousMode && !isMicMuted) {
+              startListeningRef.current();
+            }
+          }, 350);
+        } else {
+          setVoiceState("idle");
+        }
       }
     },
-    [cancelSpeechNow, continuousMode, isMicMuted, startListening, ttsEnabled]
+    [cancelSpeechNow, continuousMode, isMicMuted, ttsEnabled]
   );
 
   const submitTurn = useCallback(
@@ -746,7 +801,16 @@ export function VoiceAssistant() {
               disabled={voiceState === "listening" || voiceState === "processing"}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
-              {voiceState === "listening" ? "Listening..." : "Push to Talk"}
+              {voiceState === "listening" ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-rose-400 animate-ping" />
+                  Listening...
+                </span>
+              ) : continuousMode ? (
+                "Start Hands-Free Voice"
+              ) : (
+                "Push to Talk"
+              )}
             </button>
           )}
 
@@ -759,14 +823,14 @@ export function VoiceAssistant() {
           </button>
 
           <div className="ml-auto flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={continuousMode}
                 onChange={(e) => setContinuousMode(e.target.checked)}
-                className="rounded border-slate-300"
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              Auto-listen
+              Auto-listen (hands-free)
             </label>
 
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
