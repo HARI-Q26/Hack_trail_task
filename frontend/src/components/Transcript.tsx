@@ -3,6 +3,14 @@
 import { ToolExecutionSummary } from "@/lib/api";
 import { FormattedText } from "@/components/FormattedText";
 import { TimetableCard, TimetableToolData } from "@/components/TimetableCard";
+import {
+  AttendanceCard,
+  AttendanceToolData,
+  AcademicsCard,
+  AcademicToolData,
+  CourseDetailsCard,
+  CourseItemData,
+} from "@/components/DataCards";
 
 export interface TranscriptEntry {
   id: string;
@@ -49,8 +57,31 @@ export function Transcript({
 
       {entries.map((entry) => {
         const isUser = entry.role === "user";
-        const timetableTools = (entry.toolsUsed || []).filter(
+        const tools = entry.toolsUsed || [];
+
+        const timetableTools = tools.filter(
           (t) => t.tool_name === "get_timetable" && t.status === "success" && t.data
+        );
+
+        const attendanceTools = tools.filter(
+          (t) =>
+            (t.tool_name === "get_attendance" || t.tool_name === "get_class_attendance") &&
+            t.status === "success" &&
+            t.data
+        );
+
+        const academicTools = tools.filter(
+          (t) =>
+            (t.tool_name === "get_student_profile" || t.tool_name === "get_academics") &&
+            t.status === "success" &&
+            t.data
+        );
+
+        const courseTools = tools.filter(
+          (t) =>
+            (t.tool_name === "get_course_details" || t.tool_name === "get_admission_information") &&
+            t.status === "success" &&
+            t.data
         );
 
         if (isUser) {
@@ -100,12 +131,41 @@ export function Transcript({
               <FormattedText content={entry.content} />
             </div>
 
-            {/* Interactive Timetable Card if fetched */}
+            {/* 1. Interactive Timetable Card */}
             {timetableTools.map((tt, idx) => (
-              <div key={`tt-${idx}`} className="mt-2">
-                <TimetableCard data={tt.data as TimetableToolData} />
+              <div key={`tt-${idx}`} className="mt-1">
+                <TimetableCard data={tt.data as unknown as TimetableToolData} />
               </div>
             ))}
+
+            {/* 2. Interactive Attendance Record Card & Progress Bar */}
+            {attendanceTools.map((att, idx) => (
+              <div key={`att-${idx}`} className="mt-1">
+                <AttendanceCard data={att.data as unknown as AttendanceToolData} />
+              </div>
+            ))}
+
+            {/* 3. Interactive Academics, CGPA & Marks Card */}
+            {academicTools.map((acad, idx) => (
+              <div key={`acad-${idx}`} className="mt-1">
+                <AcademicsCard data={acad.data as unknown as AcademicToolData} />
+              </div>
+            ))}
+
+            {/* 4. Interactive Courses & Fee Structure Table Card */}
+            {courseTools.map((ct, idx) => {
+              const raw = ct.data as unknown as Record<string, unknown>;
+              const coursesList: CourseItemData[] = Array.isArray(raw)
+                ? (raw as unknown as CourseItemData[])
+                : Array.isArray(raw?.courses)
+                ? (raw.courses as unknown as CourseItemData[])
+                : [];
+              return coursesList.length > 0 ? (
+                <div key={`ct-${idx}`} className="mt-1">
+                  <CourseDetailsCard courses={coursesList} />
+                </div>
+              ) : null;
+            })}
 
             {/* Subtle Collapsed Actions / Tools Performed */}
             {entry.toolsUsed && entry.toolsUsed.length > 0 && (
