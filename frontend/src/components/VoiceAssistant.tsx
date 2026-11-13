@@ -164,6 +164,11 @@ export function VoiceAssistant() {
   const utteranceTokenRef = useRef(0);
   const recognitionTokenRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [entries, interimTranscript]);
 
   // Call timer effect
   useEffect(() => {
@@ -797,13 +802,14 @@ export function VoiceAssistant() {
       </div>
 
       {/* Transcript Log */}
-      <div className="min-h-[280px] rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+      <div className="min-h-[320px] rounded-2xl border border-slate-200/90 bg-slate-50/60 p-5 shadow-2xs">
         <Transcript
           entries={entries}
           interimTranscript={interimTranscript}
           onConfirmAction={(text) => void submitTurn(text)}
           disabled={voiceState === "processing"}
         />
+        <div ref={transcriptEndRef} />
       </div>
 
       {/* Message Input Fallback Bar */}
