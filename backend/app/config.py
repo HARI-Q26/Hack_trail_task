@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    NODE_ENV: str = "production"
     APP_NAME: str = "Quirri College Voice Agent"
     APP_ENV: str = "development"
     BACKEND_HOST: str = "0.0.0.0"
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     # College API
     COLLEGE_API_BASE_URL: str = "https://ht.knowvally.com"
     COLLEGE_PARTICIPANT_KEY: str = ""
+    COLLEGE_API_CLIENT_ID: str = ""
+    COLLEGE_API_CLIENT_SECRET: str = ""
     COLLEGE_API_TIMEOUT_SECONDS: float = 10.0
     COLLEGE_TIMEZONE: str = "Asia/Kolkata"
 
@@ -34,17 +37,26 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROK_API_KEY: str = ""
     GROK_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROK_MODEL: str = "openai/gpt-oss-120b"
     GROQ_FALLBACK_MODEL: str = "openai/gpt-oss-20b"
     GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
+    GROQ_STT_FALLBACK_MODEL: str = "whisper-large-v3"
     GROK_TIMEOUT_SECONDS: float = 25.0
 
     # Security / Session
+    SESSION_SECRET: str = ""
     SESSION_SECRET_KEY: str = "dev-insecure-change-me-in-production"
     SESSION_COOKIE_NAME: str = "quirri_session"
     SESSION_EXPIRE_MINUTES: int = 480
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: str = "lax"
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.SESSION_SECRET and (not self.SESSION_SECRET_KEY or self.SESSION_SECRET_KEY == "dev-insecure-change-me-in-production"):
+            self.SESSION_SECRET_KEY = self.SESSION_SECRET
+        if self.GROQ_MODEL:
+            self.GROK_MODEL = self.GROQ_MODEL
 
     # Database & Knowledge
     DATABASE_URL: str = "sqlite:///./data/quirri_college.db"
